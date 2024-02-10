@@ -1,3 +1,5 @@
+import unittest
+
 from libcst.codemod import CodemodTest
 
 from pytest_fixture_remover.codemod import RemovePytestFixtureCommand
@@ -80,6 +82,27 @@ class TestRemoveParametrize(CodemodTest):
                 ...
         """
         after = """
+            def test_function(param, param1):
+                ...
+        """
+
+        self.assertCodemod(before, after, name=self._fixture_name)
+
+    @unittest.expectedFailure  # Usecase not yet supported.
+    def test_a_few_argnames(self):
+        before = f"""
+            @pytest.mark.parametrize(
+                "{self._fixture_name},other_fixture",
+                [(argvalue, argvalue1), (argvalue2, argvalue3)],
+            )
+            def test_function(param, param1):
+                ...
+        """
+        after = """
+            @pytest.mark.parametrize(
+                "other_fixture",
+                [(argvalue2, argvalue3)],
+            )
             def test_function(param, param1):
                 ...
         """
