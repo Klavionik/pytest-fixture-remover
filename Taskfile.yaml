@@ -3,4 +3,4 @@
 version: '3'
 
 tasks:
-  test: python -m unittest discover --failfast
+  test: python -m unittest discover -v --failfast

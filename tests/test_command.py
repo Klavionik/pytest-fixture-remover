@@ -64,3 +64,24 @@ class TestRemoveUsage(CodemodTest):
         """
 
         self.assertCodemod(before, after, name=self._fixture_name)
+
+
+class TestRemoveParametrize(CodemodTest):
+    TRANSFORM = RemovePytestFixtureCommand
+
+    @classmethod
+    def setUpClass(cls):
+        cls._fixture_name = "test_fixture"
+
+    def test_the_only_argname(self):
+        before = f"""
+            @pytest.mark.parametrize("{self._fixture_name}", [argvalue, argvalue1])
+            def test_function(param, param1):
+                ...
+        """
+        after = """
+            def test_function(param, param1):
+                ...
+        """
+
+        self.assertCodemod(before, after, name=self._fixture_name)
