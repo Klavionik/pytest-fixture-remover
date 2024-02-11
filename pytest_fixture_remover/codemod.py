@@ -62,14 +62,13 @@ class RemovePytestFixtureCommand(VisitorBasedCodemodCommand):
             for child in updated_node.decorator.children:
                 if m.matches(child, m.Arg(m.SimpleString(f'"{self.name}"'))):
                     node = updated_node.deep_remove(child)
-                    if m.matches(node.decorator, m.Call(args=[])):
+
+                    if not len(node.decorator.args):
                         return libcst.RemoveFromParent()
 
-                    if m.matches(node.decorator, m.Call(args=[m.DoNotCare()])):
-                        for child_ in node.decorator.args[0].children:
-                            if m.matches(child_, m.Comma()):
-                                node = node.deep_remove(child_)
-                                return node
+                    for child_ in node.decorator.args[0].children:
+                        if m.matches(child_, m.Comma()):
+                            node = node.deep_remove(child_)
                     return node
 
         if m.matches(updated_node.decorator, self.get_parametrize_matcher()):
