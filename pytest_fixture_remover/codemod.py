@@ -43,10 +43,14 @@ class RemovePytestFixtureCommand(VisitorBasedCodemodCommand):
         that defines parameters for a fixture in question.
         :return: Call matcher.
         """
+
+        def has_fixture_name(value: str) -> bool:
+            return self.name in value
+
         return m.Call(
             func=m.Attribute(attr=m.Name("parametrize")),
             args=[
-                m.Arg(m.SimpleString(f'"{self.name}"')),
+                m.Arg(m.SimpleString(m.MatchIfTrue(has_fixture_name))),
                 m.ZeroOrMore(m.DoNotCare()),
             ],
         )
@@ -69,5 +73,38 @@ class RemovePytestFixtureCommand(VisitorBasedCodemodCommand):
                     return node
 
         if m.matches(updated_node.decorator, self.get_parametrize_matcher()):
-            return libcst.RemoveFromParent()
+            # Normalize argnames from a string like "fixture,fixture1" to a
+            # proper list of fixture names.
+            argnames: str = updated_node.decorator.args[0].value.evaluated_value
+            quote = updated_node.decorator.args[0].value.quote
+            argnames_normalized = argnames.replace(quote, "").split(",")
+            args_number = len(argnames_normalized)
+
+            # The fixture in question is the only one, remove the node.
+            if args_number == 1:
+                return libcst.RemoveFromParent()
+
+            # Carefully remove the fixture name from argnames,
+            # construct argnames string back from the list.
+            position = argnames_normalized.index(self.name)
+            is_last_arg = position == len(argnames_normalized) - 1
+            argnames_normalized.remove(self.name)
+            new_argnames = ",".join(argnames_normalized)
+            argvalues = updated_node.decorator.args[1].value
+
+            # Remove the corresponding element from argvalues.
+            comma = argvalues.elements[position].comma
+            updated_node = updated_node.deep_remove(argvalues.elements[position])
+
+            if is_last_arg:
+                # If argvalue was the last, preserve its comma.
+                updated_node = updated_node.with_deep_changes(
+                    updated_node.decorator.args[1].value.elements[-1], comma=comma
+                )
+
+            # Set new argnames, preserving quotes.
+            updated_node = updated_node.with_deep_changes(
+                updated_node.decorator.args[0].value,
+                value=f"{quote}{new_argnames}{quote}",
+            )
         return updated_node

@@ -1,5 +1,3 @@
-import unittest
-
 from libcst.codemod import CodemodTest
 
 from pytest_fixture_remover.codemod import RemovePytestFixtureCommand
@@ -88,8 +86,7 @@ class TestRemoveParametrize(CodemodTest):
 
         self.assertCodemod(before, after, name=self._fixture_name)
 
-    @unittest.expectedFailure  # Usecase not yet supported.
-    def test_a_few_argnames(self):
+    def test_a_few_argnames_start(self):
         before = f"""
             @pytest.mark.parametrize(
                 "{self._fixture_name},other_fixture",
@@ -102,6 +99,46 @@ class TestRemoveParametrize(CodemodTest):
             @pytest.mark.parametrize(
                 "other_fixture",
                 [(argvalue2, argvalue3)],
+            )
+            def test_function(param, param1):
+                ...
+        """
+
+        self.assertCodemod(before, after, name=self._fixture_name)
+
+    def test_a_few_argnames_middle(self):
+        before = f"""
+            @pytest.mark.parametrize(
+                "first_fixture,{self._fixture_name},other_fixture",
+                [(argvalue, argvalue1), (argvalue2, argvalue3), (argvalue4, argvalue5)],
+            )
+            def test_function(param, param1):
+                ...
+        """
+        after = """
+            @pytest.mark.parametrize(
+                "first_fixture,other_fixture",
+                [(argvalue, argvalue1), (argvalue4, argvalue5)],
+            )
+            def test_function(param, param1):
+                ...
+        """
+
+        self.assertCodemod(before, after, name=self._fixture_name)
+
+    def test_a_few_argnames_end(self):
+        before = f"""
+            @pytest.mark.parametrize(
+                "first_fixture,other_fixture,{self._fixture_name}",
+                [(argvalue, argvalue1), (argvalue2, argvalue3), (argvalue4, argvalue5)],
+            )
+            def test_function(param, param1):
+                ...
+        """
+        after = """
+            @pytest.mark.parametrize(
+                "first_fixture,other_fixture",
+                [(argvalue, argvalue1), (argvalue2, argvalue3)],
             )
             def test_function(param, param1):
                 ...
