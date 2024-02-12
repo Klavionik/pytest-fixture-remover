@@ -1,10 +1,46 @@
 import argparse
-from typing import List, Union
+from typing import Any, List, Sequence, Union
 
 import libcst as cst
 from libcst import Decorator, FlattenSentinel, RemovalSentinel
 from libcst import matchers as m
 from libcst.codemod import CodemodContext, VisitorBasedCodemodCommand
+
+
+class Parametrize:
+    def __init__(self, node: cst.Decorator) -> None:
+        self.node = node
+
+    @property
+    def argnames(self) -> List[str]:
+        return split_argnames(self.node.decorator.args[0].value.evaluated_value)
+
+    @argnames.setter
+    def argnames(self, argnames: List[str]) -> None:
+        self.node = self.node.with_deep_changes(
+            self.node.decorator.args[0].value,
+            value=f'"{join_argnames(argnames)}"',
+        )
+
+    @property
+    def argvalues(self) -> Sequence[Any]:
+        return self.node.decorator.args[1].value.elements
+
+    @argvalues.setter
+    def argvalues(self, argvalues: Sequence[Any]) -> None:
+        self.node = self.node.with_deep_changes(
+            self.node.decorator.args[1].value,
+            elements=argvalues,
+        )
+
+    def remove_argname(self, argname: str) -> None:
+        self.argnames = [name for name in self.argnames if name != argname]
+
+    def remove_argvalue(self, argvalue: Any) -> None:
+        self.argvalues = [value for value in self.argvalues if value != argvalue]
+
+    def mutate(self, old_node: cst.CSTNode, **changes: Any) -> None:
+        self.node = self.node.with_deep_changes(old_node, **changes)
 
 
 class RemovePytestFixtureCommand(VisitorBasedCodemodCommand):
@@ -71,32 +107,29 @@ class RemovePytestFixtureCommand(VisitorBasedCodemodCommand):
                         node = node.deep_remove(child_)
                 return node
 
-    def remove_fixture_parametrization(self, node: Decorator) -> Union[Decorator, RemovalSentinel]:
-        argnames = split_argnames(node.decorator.args[0].value.evaluated_value)
-        the_only_fixture = len(argnames) == 1
-
-        if the_only_fixture:
+    def remove_fixture_parametrization(
+        self, parametrize: Parametrize
+    ) -> Union[Decorator, RemovalSentinel]:
+        if len(parametrize.argnames) == 1:
             return cst.RemoveFromParent()
 
-        position = argnames.index(self.name)
-        new_argnames = join_argnames([name for name in argnames if name != self.name])
-        node = node.with_deep_changes(
-            node.decorator.args[0].value,
-            value=f'"{new_argnames}"',
-        )
+        position = parametrize.argnames.index(self.name)
+        is_last_fixture = position == len(parametrize.argnames) - 1
+        parametrize.remove_argname(self.name)
 
         # Remove the corresponding element from argvalues.
-        argvalues = node.decorator.args[1].value
-        comma = argvalues.elements[position].comma
-        node = node.deep_remove(argvalues.elements[position])
+        comma = parametrize.argvalues[position].comma
+        parametrize.remove_argvalue(parametrize.argvalues[position])
 
-        was_last_fixture = position == len(argnames) - 1
+        # If there's only one fixture left for parametrization, strip comma.
+        if len(parametrize.argvalues) == 1:
+            parametrize.mutate(parametrize.argvalues[-1], comma=cst.MaybeSentinel.DEFAULT)
+        else:
+            if is_last_fixture:
+                # If removed argvalue was the last, preserve its comma.
+                parametrize.mutate(parametrize.argvalues[-1], comma=comma)
 
-        if was_last_fixture:
-            # If argvalue was the last, preserve its comma.
-            node = node.with_deep_changes(node.decorator.args[1].value.elements[-1], comma=comma)
-
-        return node
+        return parametrize.node
 
     def leave_Decorator(self, original_node: Decorator, updated_node: Decorator) -> Union[
         Decorator,
@@ -107,7 +140,7 @@ class RemovePytestFixtureCommand(VisitorBasedCodemodCommand):
             return self.remove_fixture_usage(updated_node)
 
         if m.matches(updated_node.decorator, self.get_parametrize_matcher()):
-            return self.remove_fixture_parametrization(updated_node)
+            return self.remove_fixture_parametrization(Parametrize(updated_node))
 
         return updated_node
 
