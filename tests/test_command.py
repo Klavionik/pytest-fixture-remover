@@ -86,7 +86,7 @@ class TestRemoveParametrize(CodemodTest):
 
         self.assertCodemod(before, after, name=self._fixture_name)
 
-    def test_a_few_argnames_start(self):
+    def test_two_arguments_start(self):
         before = f"""
             @pytest.mark.parametrize(
                 "{self._fixture_name},other_fixture",
@@ -99,6 +99,46 @@ class TestRemoveParametrize(CodemodTest):
             @pytest.mark.parametrize(
                 "other_fixture",
                 [(argvalue2, argvalue3)],
+            )
+            def test_function(param, param1):
+                ...
+        """
+
+        self.assertCodemod(before, after, name=self._fixture_name)
+
+    def test_two_arguments_end(self):
+        before = f"""
+            @pytest.mark.parametrize(
+                "other_fixture,{self._fixture_name}",
+                [(argvalue, argvalue1), (argvalue2, argvalue3)],
+            )
+            def test_function(param, param1):
+                ...
+        """
+        after = """
+            @pytest.mark.parametrize(
+                "other_fixture",
+                [(argvalue, argvalue1)],
+            )
+            def test_function(param, param1):
+                ...
+        """
+
+        self.assertCodemod(before, after, name=self._fixture_name)
+
+    def test_a_few_argnames_start(self):
+        before = f"""
+            @pytest.mark.parametrize(
+                "{self._fixture_name},other_fixture,another_fixture",
+                [(argvalue, argvalue1), (argvalue2, argvalue3), (argvalue4, argvalue5)],
+            )
+            def test_function(param, param1):
+                ...
+        """
+        after = """
+            @pytest.mark.parametrize(
+                "other_fixture,another_fixture",
+                [(argvalue2, argvalue3), (argvalue4, argvalue5)],
             )
             def test_function(param, param1):
                 ...

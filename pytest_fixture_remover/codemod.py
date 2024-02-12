@@ -1,7 +1,7 @@
 import argparse
-from typing import Union
+from typing import List, Union
 
-import libcst
+import libcst as cst
 from libcst import Decorator, FlattenSentinel, RemovalSentinel
 from libcst import matchers as m
 from libcst.codemod import CodemodContext, VisitorBasedCodemodCommand
@@ -15,6 +15,7 @@ class RemovePytestFixtureCommand(VisitorBasedCodemodCommand):
     def __init__(self, context: CodemodContext, name: str) -> None:
         super().__init__(context)
         self.name = name
+        self.name_value = f'"{self.name}"'
 
     @staticmethod
     def add_args(arg_parser: argparse.ArgumentParser) -> None:
@@ -32,7 +33,7 @@ class RemovePytestFixtureCommand(VisitorBasedCodemodCommand):
             func=m.Attribute(attr=m.Name("usefixtures")),
             args=[
                 m.ZeroOrMore(m.DoNotCare()),
-                m.AtLeastN(n=1, matcher=m.Arg(m.SimpleString(f'"{self.name}"'))),
+                m.AtLeastN(n=1, matcher=m.Arg(m.SimpleString(self.name_value))),
                 m.ZeroOrMore(m.DoNotCare()),
             ],
         )
@@ -55,55 +56,84 @@ class RemovePytestFixtureCommand(VisitorBasedCodemodCommand):
             ],
         )
 
-    def leave_Decorator(
-        self, original_node: "Decorator", updated_node: "Decorator"
-    ) -> Union["Decorator", FlattenSentinel["Decorator"], RemovalSentinel]:
+    def remove_fixture_usage(self, node: Decorator) -> Union[Decorator, RemovalSentinel]:
+        the_only_fixture = len(node.decorator.args) == 1
+
+        if the_only_fixture:
+            return cst.RemoveFromParent()
+
+        for child in node.decorator.children:
+            if m.matches(child, m.Arg(m.SimpleString(self.name_value))):
+                node = node.deep_remove(child)
+
+                for child_ in node.decorator.args[0].children:
+                    if m.matches(child_, m.Comma()):
+                        node = node.deep_remove(child_)
+                return node
+
+    def remove_fixture_parametrization(self, node: Decorator) -> Union[Decorator, RemovalSentinel]:
+        argnames = split_argnames(node.decorator.args[0].value.evaluated_value)
+        the_only_fixture = len(argnames) == 1
+
+        if the_only_fixture:
+            return cst.RemoveFromParent()
+
+        position = argnames.index(self.name)
+        new_argnames = join_argnames([name for name in argnames if name != self.name])
+        node = node.with_deep_changes(
+            node.decorator.args[0].value,
+            value=f'"{new_argnames}"',
+        )
+
+        # Remove the corresponding element from argvalues.
+        argvalues = node.decorator.args[1].value
+        comma = argvalues.elements[position].comma
+        node = node.deep_remove(argvalues.elements[position])
+
+        was_last_fixture = position == len(argnames) - 1
+
+        if was_last_fixture:
+            # If argvalue was the last, preserve its comma.
+            node = node.with_deep_changes(node.decorator.args[1].value.elements[-1], comma=comma)
+
+        return node
+
+    def leave_Decorator(self, original_node: Decorator, updated_node: Decorator) -> Union[
+        Decorator,
+        FlattenSentinel[Decorator],
+        RemovalSentinel,
+    ]:
         if m.matches(updated_node.decorator, self.get_usefixtures_matcher()):
-            for child in updated_node.decorator.children:
-                if m.matches(child, m.Arg(m.SimpleString(f'"{self.name}"'))):
-                    node = updated_node.deep_remove(child)
-
-                    if not len(node.decorator.args):
-                        return libcst.RemoveFromParent()
-
-                    for child_ in node.decorator.args[0].children:
-                        if m.matches(child_, m.Comma()):
-                            node = node.deep_remove(child_)
-                    return node
+            return self.remove_fixture_usage(updated_node)
 
         if m.matches(updated_node.decorator, self.get_parametrize_matcher()):
-            # Normalize argnames from a string like "fixture,fixture1" to a
-            # proper list of fixture names.
-            argnames: str = updated_node.decorator.args[0].value.evaluated_value
-            quote = updated_node.decorator.args[0].value.quote
-            argnames_normalized = argnames.replace(quote, "").split(",")
-            args_number = len(argnames_normalized)
+            return self.remove_fixture_parametrization(updated_node)
 
-            # The fixture in question is the only one, remove the node.
-            if args_number == 1:
-                return libcst.RemoveFromParent()
-
-            # Carefully remove the fixture name from argnames,
-            # construct argnames string back from the list.
-            position = argnames_normalized.index(self.name)
-            is_last_arg = position == len(argnames_normalized) - 1
-            argnames_normalized.remove(self.name)
-            new_argnames = ",".join(argnames_normalized)
-            argvalues = updated_node.decorator.args[1].value
-
-            # Remove the corresponding element from argvalues.
-            comma = argvalues.elements[position].comma
-            updated_node = updated_node.deep_remove(argvalues.elements[position])
-
-            if is_last_arg:
-                # If argvalue was the last, preserve its comma.
-                updated_node = updated_node.with_deep_changes(
-                    updated_node.decorator.args[1].value.elements[-1], comma=comma
-                )
-
-            # Set new argnames, preserving quotes.
-            updated_node = updated_node.with_deep_changes(
-                updated_node.decorator.args[0].value,
-                value=f"{quote}{new_argnames}{quote}",
-            )
         return updated_node
+
+
+def split_argnames(argnames_string: str) -> List[str]:
+    """
+    Split `parametrize` argnames string to a proper
+    list of fixture names.
+
+    >>> split_argnames("fixture,fixture1")
+    ['fixture', 'fixture1']
+
+    :param argnames_string: Argnames.
+    :return: List of fixtures.
+    """
+    return argnames_string.split(",")
+
+
+def join_argnames(argnames_list: list) -> str:
+    """
+    Concatecate argnames string from a list of fixture names.
+
+    >>> join_argnames(['fixture1', 'fixture2'])
+    'fixture1,fixture2'
+
+    :param argnames_list: `pytest.mark.parametrize` argnames argument.
+    :return: Fixtures string.
+    """
+    return ",".join(argnames_list)
