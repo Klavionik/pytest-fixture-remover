@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2024-02-13
+
+### Changed
+- `pytest_fixture_remove` package now exports `RemovePytestFixtureCommand`.
+- Update README, fixing the run command.
+
+
 ## [1.0.0] - 2024-02-13
 - First public release.
 - `pytest-fixture-remover` supports removing fixtures and their parametrization.

@@ -13,7 +13,7 @@ as well as its parametrizations.
 # Usage
 This package requires Python >= 3.8. 
 
-Install from PyPI into your project.
+Install from PyPI.
 
 ```shell
 pip install pytest-fixture-remover
@@ -22,8 +22,10 @@ pip install pytest-fixture-remover
 Run against your tests, specifying a fixture to remove.
 
 ```shell
-python -m libcst.tool codemod.RemovePytestFixtureCommand my_project_tests/ --name clean_db
+python -m libcst.tool codemod -x pytest_fixture_remover.RemovePytestFixtureCommand my_project_tests/ --name clean_db
 ```
+
+Add `--no-format` option to stop LibCST from running Black against modified code.
 
 Before/after examples can be found in the `tests.test_command` module.
 
