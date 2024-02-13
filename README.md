@@ -8,7 +8,7 @@ A LibCST codemod to remove pytest fixtures applied via the `usefixtures` decorat
 as well as its parametrizations.
 
 > [!NOTE]
-> Only fixture usages will be removed, not its definition.
+> Only fixture usage will be removed, not its definition.
 
 # Usage
 This package requires Python >= 3.8. 
@@ -35,7 +35,7 @@ the magic trailing comma. It **may** change the existing formatting in several w
 1. When removing a fixture name from the `usefixtures` call.
 2. When removing a value that parametrizes the fixture via `parametrize`.
 
-In both cases the behavior is the same and obey the following rules:
+In both cases the behavior is the same and obeys the following rules:
 1. If there's only one item left after modifying, remove the trailing comma.
-2. If there's multiple items left after modifying and the removed item was the last,
-preserve the last item's comma (or its absense).
+2. If there are multiple items left after modifying and the removed item was the last,
+preserve the last item's comma (or its absence).
