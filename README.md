@@ -1,4 +1,9 @@
 # pytest fixture remove codemod
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![codecov](https://codecov.io/gh/Klavionik/pytest-fixture-remover/graph/badge.svg?token=L5GROOX2QN)](https://codecov.io/gh/Klavionik/pytest-fixture-remover)
+[![PyPI - Version](https://img.shields.io/pypi/v/pytest-fixture-remover)](https://pypi.org/project/pytest-fixture-remover)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pytest-fixture-remover)
+
 A LibCST codemod to remove pytest fixtures applied via the `usefixtures` decorator,
 as well as its parametrizations.
 
