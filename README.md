@@ -26,3 +26,14 @@ python -m libcst.tool codemod.RemovePytestFixtureCommand my_project_tests/ --nam
 ```
 
 Before/after examples can be found in the `tests.test_command` module.
+
+# Note on formatting
+This codemod assumes that the target code is formatted with Black using
+the magic trailing comma. It **may** change the existing formatting in several ways:
+1. When removing a fixture name from the `usefixtures` call.
+2. When removing a value that parametrizes the fixture via `parametrize`.
+
+In both cases the behavior is the same and obey the following rules:
+1. If there's only one item left after modifying, remove the trailing comma.
+2. If there's multiple items left after modifying and the removed item was the last,
+preserve the last item's comma (or its absense).
