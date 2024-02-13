@@ -15,6 +15,9 @@ classifiers = [
 python = "^3.8"
 libcst = "^1.1.0"
 
+[tool.poetry.group.dev.dependencies]
+coverage = "^7.4.1"
+
 [tool.black]
 line-length = 100
 
