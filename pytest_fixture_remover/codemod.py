@@ -7,6 +7,21 @@ from libcst import matchers as m
 from libcst.codemod import CodemodContext, VisitorBasedCodemodCommand
 
 
+class Usefixtures:
+    def __init__(self, node: cst.Decorator) -> None:
+        self.node = node
+
+    @property
+    def fixtures(self) -> Sequence[cst.CSTNode]:
+        return self.node.decorator.args
+
+    def remove_fixture(self, fixture: cst.CSTNode) -> None:
+        self.node = self.node.deep_remove(fixture)
+
+    def mutate(self, old_node: cst.CSTNode, **changes: Any) -> None:
+        self.node = self.node.with_deep_changes(old_node, **changes)
+
+
 class Parametrize:
     def __init__(self, node: cst.Decorator) -> None:
         self.node = node
@@ -92,20 +107,28 @@ class RemovePytestFixtureCommand(VisitorBasedCodemodCommand):
             ],
         )
 
-    def remove_fixture_usage(self, node: Decorator) -> Union[Decorator, RemovalSentinel]:
-        the_only_fixture = len(node.decorator.args) == 1
+    def remove_fixture_usage(self, usefixtures: Usefixtures) -> Union[Decorator, RemovalSentinel]:
+        the_only_fixture = len(usefixtures.fixtures) == 1
 
         if the_only_fixture:
             return cst.RemoveFromParent()
 
-        for child in node.decorator.children:
-            if m.matches(child, m.Arg(m.SimpleString(self.name_value))):
-                node = node.deep_remove(child)
+        for fixture in usefixtures.fixtures:
+            if m.matches(fixture, m.Arg(m.SimpleString(self.name_value))):
+                is_last_fixture = (
+                    usefixtures.fixtures.index(fixture) == len(usefixtures.fixtures) - 1
+                )
+                comma = fixture.comma
+                usefixtures.remove_fixture(fixture)
 
-                for child_ in node.decorator.args[0].children:
-                    if m.matches(child_, m.Comma()):
-                        node = node.deep_remove(child_)
-                return node
+                # If removed fixture was the last, preserve its comma.
+                if len(usefixtures.fixtures) > 1 and is_last_fixture:
+                    usefixtures.mutate(usefixtures.fixtures[-1], comma=comma)
+                else:
+                    # If there's only one fixture name left, strip comma.
+                    usefixtures.mutate(usefixtures.fixtures[-1], comma=cst.MaybeSentinel.DEFAULT)
+
+                return usefixtures.node
 
     def remove_fixture_parametrization(
         self, parametrize: Parametrize
@@ -121,13 +144,12 @@ class RemovePytestFixtureCommand(VisitorBasedCodemodCommand):
         comma = parametrize.argvalues[position].comma
         parametrize.remove_argvalue(parametrize.argvalues[position])
 
-        # If there's only one fixture left for parametrization, strip comma.
-        if len(parametrize.argvalues) == 1:
-            parametrize.mutate(parametrize.argvalues[-1], comma=cst.MaybeSentinel.DEFAULT)
+        if len(parametrize.argvalues) > 1 and is_last_fixture:
+            # If removed argvalue was the last, preserve its comma.
+            parametrize.mutate(parametrize.argvalues[-1], comma=comma)
         else:
-            if is_last_fixture:
-                # If removed argvalue was the last, preserve its comma.
-                parametrize.mutate(parametrize.argvalues[-1], comma=comma)
+            # If there's only one fixture left for parametrization, strip comma.
+            parametrize.mutate(parametrize.argvalues[-1], comma=cst.MaybeSentinel.DEFAULT)
 
         return parametrize.node
 
@@ -137,7 +159,7 @@ class RemovePytestFixtureCommand(VisitorBasedCodemodCommand):
         RemovalSentinel,
     ]:
         if m.matches(updated_node.decorator, self.get_usefixtures_matcher()):
-            return self.remove_fixture_usage(updated_node)
+            return self.remove_fixture_usage(Usefixtures(updated_node))
 
         if m.matches(updated_node.decorator, self.get_parametrize_matcher()):
             return self.remove_fixture_parametrization(Parametrize(updated_node))

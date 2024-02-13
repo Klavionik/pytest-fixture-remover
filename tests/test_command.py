@@ -10,7 +10,7 @@ class TestRemoveUsage(CodemodTest):
     def setUpClass(cls):
         cls._fixture_name = "test_fixture"
 
-    def test_the_only_fixture_in_use(self) -> None:
+    def test_one_fixture(self) -> None:
         before = f"""
             @pytest.mark.usefixtures("{self._fixture_name}")
             def test_function(param, param1):
@@ -51,7 +51,7 @@ class TestRemoveUsage(CodemodTest):
 
         self.assertCodemod(before, after, name=self._fixture_name)
 
-    def test_two_fixtures_drops_trailing_comma(self) -> None:
+    def test_two_fixtures_end_drops_trailing_comma(self) -> None:
         before = f"""
             @pytest.mark.usefixtures("other_fixture", "{self._fixture_name}",)
             def test_function(param, param1):
@@ -67,12 +67,12 @@ class TestRemoveUsage(CodemodTest):
 
     def test_a_few_fixtures_start(self) -> None:
         before = f"""
-            @pytest.mark.usefixtures("{self._fixture_name}", "other_fixture")
+            @pytest.mark.usefixtures("{self._fixture_name}", "other_fixture", "another_fixture")
             def test_function(param, param1):
                 ...
         """
         after = """
-            @pytest.mark.usefixtures("other_fixture")
+            @pytest.mark.usefixtures("other_fixture", "another_fixture")
             def test_function(param, param1):
                 ...
         """
@@ -95,12 +95,26 @@ class TestRemoveUsage(CodemodTest):
 
     def test_a_few_fixtures_end(self) -> None:
         before = f"""
-            @pytest.mark.usefixtures("first_fixture", "{self._fixture_name}")
+            @pytest.mark.usefixtures("first_fixture", "other_fixture", "{self._fixture_name}")
             def test_function(param, param1):
                 ...
         """
         after = """
-            @pytest.mark.usefixtures("first_fixture")
+            @pytest.mark.usefixtures("first_fixture", "other_fixture")
+            def test_function(param, param1):
+                ...
+        """
+
+        self.assertCodemod(before, after, name=self._fixture_name)
+
+    def test_a_few_fixtures_end_keeps_trailing_comma(self) -> None:
+        before = f"""
+            @pytest.mark.usefixtures("first_fixture", "other_fixture", "{self._fixture_name}",)
+            def test_function(param, param1):
+                ...
+        """
+        after = """
+            @pytest.mark.usefixtures("first_fixture", "other_fixture",)
             def test_function(param, param1):
                 ...
         """
@@ -115,7 +129,7 @@ class TestRemoveParametrize(CodemodTest):
     def setUpClass(cls):
         cls._fixture_name = "test_fixture"
 
-    def test_the_only_argname(self):
+    def test_one_argument(self):
         before = f"""
             @pytest.mark.parametrize("{self._fixture_name}", [argvalue, argvalue1])
             def test_function(param, param1):
@@ -188,7 +202,7 @@ class TestRemoveParametrize(CodemodTest):
 
         self.assertCodemod(before, after, name=self._fixture_name)
 
-    def test_a_few_argnames_start(self):
+    def test_a_few_arguments_start(self):
         before = f"""
             @pytest.mark.parametrize(
                 "{self._fixture_name},other_fixture,another_fixture",
@@ -208,7 +222,7 @@ class TestRemoveParametrize(CodemodTest):
 
         self.assertCodemod(before, after, name=self._fixture_name)
 
-    def test_a_few_argnames_middle(self):
+    def test_a_few_arguments_middle(self):
         before = f"""
             @pytest.mark.parametrize(
                 "first_fixture,{self._fixture_name},other_fixture",
@@ -228,7 +242,7 @@ class TestRemoveParametrize(CodemodTest):
 
         self.assertCodemod(before, after, name=self._fixture_name)
 
-    def test_a_few_argnames_end(self):
+    def test_a_few_arguments_end(self):
         before = f"""
             @pytest.mark.parametrize(
                 "first_fixture,other_fixture,{self._fixture_name}",
@@ -248,7 +262,7 @@ class TestRemoveParametrize(CodemodTest):
 
         self.assertCodemod(before, after, name=self._fixture_name)
 
-    def test_a_few_argnames_end_keeps_trailing_comma(self):
+    def test_a_few_arguments_end_keeps_trailing_comma(self):
         before = f"""
             @pytest.mark.parametrize(
                 "first_fixture,other_fixture,{self._fixture_name}",
