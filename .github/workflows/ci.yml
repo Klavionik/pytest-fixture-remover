@@ -7,10 +7,12 @@ on:
       - "main"
     paths-ignore:
       - "README.md"
+      - "CHANGELOG.md"
       - "Taskfile.yaml"
   pull_request:
     paths-ignore:
       - "README.md"
+      - "CHANGELOG.md"
       - "Taskfile.yaml"
   release:
     types:
