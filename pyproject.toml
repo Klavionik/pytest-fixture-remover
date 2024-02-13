@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pytest-fixture-remover"
-version = "0.1.0"
+version = "1.0.0"
 description = "A LibCST codemod to remove pytest fixtures applied via the usefixtures decorator, as well as its parametrizations."
 authors = ["Roman Vlasenko <klavionik@gmail.com>"]
 readme = "README.md"
